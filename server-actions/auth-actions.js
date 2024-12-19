@@ -2,7 +2,7 @@
 
 import { createAuthSession } from "@/lib/auth";
 import { hashUserPassword } from "@/lib/hash";
-import { createUser } from "@/lib/user";
+import { createUser, getUserByEmail } from "@/lib/user";
 import { redirect } from "next/navigation";
 
 export async function signup(prevState, formData) {
@@ -27,19 +27,41 @@ export async function signup(prevState, formData) {
 
   // store it in the database (create new user)
 
-  const hashedPassword = hashUserPassword(password)
+  const hashedPassword = hashUserPassword(password);
   try {
-    createUser(email, hashedPassword);
+    const id = createUser(email, hashedPassword);
+    if (!id) {
+      throw new Error("Failed to create user");
+    }
     await createAuthSession(id);
     redirect("/training");
-}
-  catch (error) {
+  } catch (error) {
     if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
       return { errors: { email: "Email already in use." } };
     }
     throw error;
   }
+}
 
- 
-    
+export async function login(prevState, formData) {
+  const email = formData.get("email");
+  const password = formData.get("password");
+
+  const existingUser = getUserByEmail(email);
+
+  if (!existingUser) {
+    return { errors: { email: "User not found. Check credentials." } };
+  }
+
+  const isValidPassword = await verifyUserPassword(
+    existingUser.password,
+    password
+  );
+
+  if (!isValidPassword) {
+    return { errors: { password: "Incorrect password." } };
+  }
+
+  await createAuthSession(existingUser.id);
+    redirect("/training");
 }
